@@ -1,0 +1,5 @@
+@import "tailwindcss";
+.solarflux-location-input::placeholder {
+  color: var(--placeholder-color);
+  opacity: 1;
+}
