@@ -205,7 +205,7 @@ function FutureEnergyForecast({
 
 
   // =========================================================
-  // SYNC LOCATION
+  // SYNC DASHBOARD LOCATION
   // =========================================================
 
   useEffect(() => {
@@ -240,6 +240,10 @@ function FutureEnergyForecast({
       location.trim();
 
 
+    // --------------------------------------------------------
+    // LOCATION VALIDATION
+    // --------------------------------------------------------
+
     if (!cleanLocation) {
 
       setError(
@@ -249,6 +253,10 @@ function FutureEnergyForecast({
       return;
     }
 
+
+    // --------------------------------------------------------
+    // DATE VALIDATION
+    // --------------------------------------------------------
 
     if (
       !startDate ||
@@ -263,14 +271,21 @@ function FutureEnergyForecast({
     }
 
 
-    if (
-      new Date(
-        `${endDate}T00:00:00`
-      )
-      <
+    const selectedStart =
       new Date(
         `${startDate}T00:00:00`
-      )
+      );
+
+
+    const selectedEnd =
+      new Date(
+        `${endDate}T00:00:00`
+      );
+
+
+    if (
+      selectedEnd <
+      selectedStart
     ) {
 
       setError(
@@ -281,11 +296,16 @@ function FutureEnergyForecast({
     }
 
 
+    // --------------------------------------------------------
+    // API CALL
+    // --------------------------------------------------------
+
     try {
 
       setLoading(
         true
       );
+
 
       setError(
         ""
@@ -304,6 +324,12 @@ function FutureEnergyForecast({
         });
 
 
+      console.log(
+        "Future Solar Forecast:",
+        result
+      );
+
+
       setForecastData(
         result
       );
@@ -318,7 +344,7 @@ function FutureEnergyForecast({
 
 
       setError(
-        err.message ||
+        err?.message ||
         "Unable to generate future solar forecast."
       );
 
@@ -333,48 +359,96 @@ function FutureEnergyForecast({
 
 
   // =========================================================
-  // SAFE THEME
+  // THEME COLORS
   // =========================================================
+
+  const isDarkTheme =
+    theme?.isDark === true;
+
 
   const solarColor =
     theme?.solar ||
     "#C48A5F";
 
 
-  const borderColor =
-    theme?.border ||
-    "rgba(255,255,255,0.18)";
-
-
   const textColor =
-    theme?.text ||
-    "#FFFFFF";
+    isDarkTheme
+      ? "#FFFFFF"
+      : "#1F2B3A";
 
 
   const mutedColor =
-    theme?.mutedText ||
-    "rgba(255,255,255,0.65)";
+    isDarkTheme
+      ? "rgba(255,255,255,0.68)"
+      : "#5B7089";
+
+
+  const secondaryTextColor =
+    isDarkTheme
+      ? "rgba(255,255,255,0.82)"
+      : "#31445A";
+
+
+  const borderColor =
+    isDarkTheme
+      ? "rgba(255,255,255,0.16)"
+      : "rgba(49,68,90,0.16)";
 
 
   const cardBackground =
-    theme?.isDark
-
-      ? "rgba(17, 31, 48, 0.78)"
-
-      : "rgba(255, 255, 255, 0.90)";
+    isDarkTheme
+      ? "rgba(17,31,48,0.82)"
+      : "rgba(255,255,255,0.94)";
 
 
   const innerBackground =
-    theme?.isDark
-
+    isDarkTheme
       ? "rgba(255,255,255,0.06)"
+      : "rgba(246,248,250,0.94)";
 
-      : "rgba(255,255,255,0.65)";
 
+  const inputBackground =
+    isDarkTheme
+      ? "rgba(255,255,255,0.07)"
+      : "#F7F9FB";
+
+
+  // =========================================================
+  // SAFE FORECAST ARRAY
+  //
+  // IMPORTANT:
+  // Earlier this variable was missing.
+  // forecast.map() caused the white screen after Generate.
+  // =========================================================
 
   const forecast =
-    forecastData?.forecast ??
-    [];
+    Array.isArray(
+      forecastData?.forecast
+    )
+      ? forecastData.forecast
+      : [];
+
+
+  // =========================================================
+  // SAFE SUMMARY VALUES
+  // =========================================================
+
+  const tomorrowPrediction =
+    forecastData
+      ?.tomorrowPrediction
+      ?? "--";
+
+
+  const totalPredictedEnergy =
+    forecastData
+      ?.totalPredictedEnergy
+      ?? "--";
+
+
+  const averageDailyEnergy =
+    forecastData
+      ?.averageDailyEnergy
+      ?? "--";
 
 
   // =========================================================
@@ -404,11 +478,17 @@ function FutureEnergyForecast({
       viewport={{
         once:
           true,
+
+        amount:
+          0.1,
       }}
 
       transition={{
         duration:
           0.6,
+
+        ease:
+          [0.22, 1, 0.36, 1],
       }}
 
       className="mt-6 rounded-3xl border p-6 shadow-xl backdrop-blur-xl"
@@ -422,6 +502,13 @@ function FutureEnergyForecast({
 
         color:
           textColor,
+
+        boxShadow:
+          isDarkTheme
+
+            ? "0 20px 55px rgba(0,0,0,0.25)"
+
+            : "0 20px 55px rgba(28,60,75,0.10)",
       }}
     >
 
@@ -448,6 +535,7 @@ function FutureEnergyForecast({
 
             <BrainCircuit
               size={22}
+              strokeWidth={1.8}
             />
 
           </div>
@@ -494,14 +582,20 @@ function FutureEnergyForecast({
         </div>
 
 
+        {/* MODEL BADGE */}
+
         <div
 
-          className="flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-[10px]"
+          className="flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-medium"
 
           style={{
             borderColor,
+
             backgroundColor:
               innerBackground,
+
+            color:
+              secondaryTextColor,
           }}
         >
 
@@ -522,7 +616,7 @@ function FutureEnergyForecast({
 
 
       {/* =====================================================
-          FORM
+          FORECAST FORM
       ===================================================== */}
 
       <form
@@ -534,7 +628,9 @@ function FutureEnergyForecast({
         className="mt-6 grid gap-3 lg:grid-cols-[1.5fr_1fr_1fr_auto]"
       >
 
-        {/* LOCATION */}
+        {/* ===================================================
+            LOCATION
+        =================================================== */}
 
         <div>
 
@@ -555,7 +651,12 @@ function FutureEnergyForecast({
             <MapPin
               size={15}
 
-              className="absolute left-3 top-1/2 -translate-y-1/2 opacity-60"
+              className="absolute left-3 top-1/2 -translate-y-1/2"
+
+              style={{
+                color:
+                  mutedColor,
+              }}
             />
 
 
@@ -578,16 +679,19 @@ function FutureEnergyForecast({
 
               placeholder="Mumbai"
 
-              className="h-11 w-full rounded-xl border pl-9 pr-3 text-sm outline-none"
+              className="h-11 w-full rounded-xl border pl-9 pr-3 text-sm outline-none transition focus:ring-2"
 
               style={{
                 borderColor,
 
                 backgroundColor:
-                  innerBackground,
+                  inputBackground,
 
                 color:
                   textColor,
+
+                "--tw-ring-color":
+                  `${solarColor}55`,
               }}
             />
 
@@ -596,7 +700,9 @@ function FutureEnergyForecast({
         </div>
 
 
-        {/* START DATE */}
+        {/* ===================================================
+            START DATE
+        =================================================== */}
 
         <div>
 
@@ -617,7 +723,12 @@ function FutureEnergyForecast({
             <CalendarDays
               size={15}
 
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+
+              style={{
+                color:
+                  mutedColor,
+              }}
             />
 
 
@@ -650,16 +761,24 @@ function FutureEnergyForecast({
                   )
               }
 
-              className="h-11 w-full rounded-xl border pl-9 pr-3 text-sm outline-none"
+              className="h-11 w-full rounded-xl border pl-9 pr-3 text-sm outline-none transition focus:ring-2"
 
               style={{
                 borderColor,
 
                 backgroundColor:
-                  innerBackground,
+                  inputBackground,
 
                 color:
                   textColor,
+
+                colorScheme:
+                  isDarkTheme
+                    ? "dark"
+                    : "light",
+
+                "--tw-ring-color":
+                  `${solarColor}55`,
               }}
             />
 
@@ -668,7 +787,9 @@ function FutureEnergyForecast({
         </div>
 
 
-        {/* END DATE */}
+        {/* ===================================================
+            END DATE
+        =================================================== */}
 
         <div>
 
@@ -689,7 +810,12 @@ function FutureEnergyForecast({
             <CalendarDays
               size={15}
 
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+
+              style={{
+                color:
+                  mutedColor,
+              }}
             />
 
 
@@ -702,7 +828,10 @@ function FutureEnergyForecast({
               }
 
               min={
-                startDate
+                startDate ||
+                formatInputDate(
+                  today
+                )
               }
 
               max={
@@ -720,16 +849,24 @@ function FutureEnergyForecast({
                   )
               }
 
-              className="h-11 w-full rounded-xl border pl-9 pr-3 text-sm outline-none"
+              className="h-11 w-full rounded-xl border pl-9 pr-3 text-sm outline-none transition focus:ring-2"
 
               style={{
                 borderColor,
 
                 backgroundColor:
-                  innerBackground,
+                  inputBackground,
 
                 color:
                   textColor,
+
+                colorScheme:
+                  isDarkTheme
+                    ? "dark"
+                    : "light",
+
+                "--tw-ring-color":
+                  `${solarColor}55`,
               }}
             />
 
@@ -738,7 +875,9 @@ function FutureEnergyForecast({
         </div>
 
 
-        {/* BUTTON */}
+        {/* ===================================================
+            GENERATE BUTTON
+        =================================================== */}
 
         <div className="flex items-end">
 
@@ -750,7 +889,7 @@ function FutureEnergyForecast({
               loading
             }
 
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:opacity-60 lg:w-auto"
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60 lg:w-auto"
 
             style={{
               backgroundColor:
@@ -788,12 +927,29 @@ function FutureEnergyForecast({
 
 
       {/* =====================================================
-          ERROR
+          ERROR MESSAGE
       ===================================================== */}
 
       {error && (
 
-        <div
+        <motion.div
+
+          initial={{
+            opacity:
+              0,
+
+            y:
+              -5,
+          }}
+
+          animate={{
+            opacity:
+              1,
+
+            y:
+              0,
+          }}
+
           className="mt-4 rounded-xl border px-4 py-3 text-sm"
 
           style={{
@@ -803,12 +959,15 @@ function FutureEnergyForecast({
 
             backgroundColor:
               "rgba(196,90,70,0.08)",
+
+            color:
+              textColor,
           }}
         >
 
           {error}
 
-        </div>
+        </motion.div>
 
       )}
 
@@ -824,6 +983,7 @@ function FutureEnergyForecast({
 
           style={{
             borderColor,
+
             backgroundColor:
               innerBackground,
           }}
@@ -865,10 +1025,68 @@ function FutureEnergyForecast({
 
 
       {/* =====================================================
+          LOADING STATE
+      ===================================================== */}
+
+      {loading && (
+
+        <div
+          className="mt-6 flex min-h-[140px] items-center justify-center rounded-2xl border"
+
+          style={{
+            borderColor,
+
+            backgroundColor:
+              innerBackground,
+          }}
+        >
+
+          <div className="text-center">
+
+            <LoaderCircle
+              size={27}
+
+              className="mx-auto animate-spin"
+
+              style={{
+                color:
+                  solarColor,
+              }}
+            />
+
+
+            <p className="mt-3 text-sm font-medium">
+
+              Generating solar forecast...
+
+            </p>
+
+
+            <p
+              className="mt-1 text-xs"
+
+              style={{
+                color:
+                  mutedColor,
+              }}
+            >
+
+              Analyzing weather conditions with XGBoost.
+
+            </p>
+
+          </div>
+
+        </div>
+
+      )}
+
+
+      {/* =====================================================
           RESULTS
       ===================================================== */}
 
-      {forecastData && (
+      {forecastData && !loading && (
 
         <motion.div
 
@@ -877,7 +1095,7 @@ function FutureEnergyForecast({
               0,
 
             y:
-              10,
+              12,
           }}
 
           animate={{
@@ -888,10 +1106,17 @@ function FutureEnergyForecast({
               0,
           }}
 
+          transition={{
+            duration:
+              0.45,
+          }}
+
           className="mt-7"
         >
 
-          {/* LOCATION */}
+          {/* =================================================
+              LOCATION + MODEL
+          ================================================= */}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
 
@@ -907,10 +1132,18 @@ function FutureEnergyForecast({
               />
 
 
-              <span className="font-medium">
+              <span
+                className="font-medium"
+
+                style={{
+                  color:
+                    secondaryTextColor,
+                }}
+              >
 
                 {
-                  forecastData.location
+                  forecastData?.location ||
+                  location
                 }
 
               </span>
@@ -928,16 +1161,22 @@ function FutureEnergyForecast({
             >
 
               {
-                forecastData.model
+                forecastData?.model ||
+                "XGBoost"
               }
 
               {" • "}
 
               {
-                forecastData.systemCapacity
+                forecastData
+                  ?.systemCapacity
+                ?? 5
               }{" "}
+
               {
-                forecastData.systemCapacityUnit
+                forecastData
+                  ?.systemCapacityUnit
+                ?? "kWp"
               }
 
             </span>
@@ -945,17 +1184,26 @@ function FutureEnergyForecast({
           </div>
 
 
-          {/* SUMMARY */}
+          {/* =================================================
+              SUMMARY CARDS
+          ================================================= */}
 
           <div className="mt-5 grid gap-3 md:grid-cols-3">
 
             {/* TOMORROW */}
 
-            <div
+            <motion.div
+
+              whileHover={{
+                y:
+                  -3,
+              }}
+
               className="rounded-2xl border p-4"
 
               style={{
                 borderColor,
+
                 backgroundColor:
                   innerBackground,
               }}
@@ -966,7 +1214,7 @@ function FutureEnergyForecast({
                 <div>
 
                   <p
-                    className="text-[10px] uppercase tracking-[0.12em]"
+                    className="text-[10px] font-semibold uppercase tracking-[0.12em]"
 
                     style={{
                       color:
@@ -977,15 +1225,21 @@ function FutureEnergyForecast({
                   </p>
 
 
-                  <p className="mt-2 text-2xl font-semibold">
+                  <p
+                    className="mt-2 text-2xl font-semibold"
+
+                    style={{
+                      color:
+                        textColor,
+                    }}
+                  >
 
                     {
-                      forecastData.tomorrowPrediction ??
-                      "--"
+                      tomorrowPrediction
                     }
 
                     <span
-                      className="ml-1 text-xs"
+                      className="ml-1 text-xs font-medium"
 
                       style={{
                         color:
@@ -1011,16 +1265,23 @@ function FutureEnergyForecast({
 
               </div>
 
-            </div>
+            </motion.div>
 
 
             {/* TOTAL */}
 
-            <div
+            <motion.div
+
+              whileHover={{
+                y:
+                  -3,
+              }}
+
               className="rounded-2xl border p-4"
 
               style={{
                 borderColor,
+
                 backgroundColor:
                   innerBackground,
               }}
@@ -1031,7 +1292,7 @@ function FutureEnergyForecast({
                 <div>
 
                   <p
-                    className="text-[10px] uppercase tracking-[0.12em]"
+                    className="text-[10px] font-semibold uppercase tracking-[0.12em]"
 
                     style={{
                       color:
@@ -1042,14 +1303,21 @@ function FutureEnergyForecast({
                   </p>
 
 
-                  <p className="mt-2 text-2xl font-semibold">
+                  <p
+                    className="mt-2 text-2xl font-semibold"
+
+                    style={{
+                      color:
+                        textColor,
+                    }}
+                  >
 
                     {
-                      forecastData.totalPredictedEnergy
+                      totalPredictedEnergy
                     }
 
                     <span
-                      className="ml-1 text-xs"
+                      className="ml-1 text-xs font-medium"
 
                       style={{
                         color:
@@ -1075,16 +1343,23 @@ function FutureEnergyForecast({
 
               </div>
 
-            </div>
+            </motion.div>
 
 
             {/* AVERAGE */}
 
-            <div
+            <motion.div
+
+              whileHover={{
+                y:
+                  -3,
+              }}
+
               className="rounded-2xl border p-4"
 
               style={{
                 borderColor,
+
                 backgroundColor:
                   innerBackground,
               }}
@@ -1095,7 +1370,7 @@ function FutureEnergyForecast({
                 <div>
 
                   <p
-                    className="text-[10px] uppercase tracking-[0.12em]"
+                    className="text-[10px] font-semibold uppercase tracking-[0.12em]"
 
                     style={{
                       color:
@@ -1106,14 +1381,21 @@ function FutureEnergyForecast({
                   </p>
 
 
-                  <p className="mt-2 text-2xl font-semibold">
+                  <p
+                    className="mt-2 text-2xl font-semibold"
+
+                    style={{
+                      color:
+                        textColor,
+                    }}
+                  >
 
                     {
-                      forecastData.averageDailyEnergy
+                      averageDailyEnergy
                     }
 
                     <span
-                      className="ml-1 text-xs"
+                      className="ml-1 text-xs font-medium"
 
                       style={{
                         color:
@@ -1139,172 +1421,343 @@ function FutureEnergyForecast({
 
               </div>
 
-            </div>
+            </motion.div>
 
           </div>
 
 
-          {/* DAILY FORECAST */}
+          {/* =================================================
+              DATE-WISE FORECAST
+          ================================================= */}
 
           <div className="mt-5">
 
-            <p className="text-sm font-semibold">
+            <div className="flex items-center justify-between gap-3">
 
-              Date-wise Energy Forecast
+              <div>
 
-            </p>
+                <p
+                  className="text-sm font-semibold"
 
+                  style={{
+                    color:
+                      textColor,
+                  }}
+                >
 
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                  Date-wise Energy Forecast
 
-              {
-                forecast.map(
-                  (
-                    item
-                  ) => (
-
-                    <motion.div
-
-                      key={
-                        item.date
-                      }
-
-                      whileHover={{
-                        y:
-                          -3,
-                      }}
-
-                      className="rounded-2xl border p-4"
-
-                      style={{
-                        borderColor,
-                        backgroundColor:
-                          innerBackground,
-                      }}
-                    >
-
-                      <div className="flex items-center justify-between">
-
-                        <p
-                          className="text-[10px] font-semibold uppercase tracking-[0.12em]"
-
-                          style={{
-                            color:
-                              mutedColor,
-                          }}
-                        >
-
-                          {
-                            formatDisplayDate(
-                              item.date
-                            )
-                          }
-
-                        </p>
+                </p>
 
 
-                        <Sun
-                          size={15}
+                <p
+                  className="mt-1 text-[11px]"
 
-                          style={{
-                            color:
-                              solarColor,
-                          }}
-                        />
+                  style={{
+                    color:
+                      mutedColor,
+                  }}
+                >
 
-                      </div>
+                  Daily predicted solar generation for the selected range
 
+                </p>
 
-                      <p className="mt-3 text-xl font-semibold">
-
-                        {
-                          item.predictedEnergy
-                        }
-
-                        <span
-                          className="ml-1 text-[10px]"
-
-                          style={{
-                            color:
-                              mutedColor,
-                          }}
-                        >
-                          kWh
-                        </span>
-
-                      </p>
+              </div>
 
 
-                      <div
-                        className="mt-3 space-y-1 text-[10px]"
+              <div
+                className="rounded-full px-3 py-1 text-[10px]"
 
-                        style={{
-                          color:
-                            mutedColor,
-                        }}
-                      >
+                style={{
+                  backgroundColor:
+                    `${solarColor}14`,
 
-                        <div className="flex items-center gap-1">
+                  color:
+                    solarColor,
+                }}
+              >
 
-                          <Cloud
-                            size={11}
-                          />
+                {
+                  forecast.length
+                }{" "}
 
-                          Cloud{" "}
-                          {
-                            item.weatherInputs
-                              ?.averageCloudCover
-                          }%
+                {
+                  forecast.length === 1
+                    ? "Day"
+                    : "Days"
+                }
 
-                        </div>
-
-
-                        <p>
-
-                          Sunshine:{" "}
-                          {
-                            item.weatherInputs
-                              ?.sunshineHours
-                          } hrs
-
-                        </p>
-
-
-                        <p>
-
-                          Radiation:{" "}
-                          {
-                            item.weatherInputs
-                              ?.averageSolarRadiation
-                          } W/m²
-
-                        </p>
-
-                      </div>
-
-                    </motion.div>
-
-                  )
-                )
-              }
+              </div>
 
             </div>
+
+
+            {/* =================================================
+                DAILY CARDS
+            ================================================= */}
+
+            {forecast.length > 0 ? (
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+
+                {
+                  forecast.map(
+                    (
+                      item,
+                      index
+                    ) => {
+
+                      const predictedEnergy =
+                        item
+                          ?.predictedEnergy
+                        ?? "--";
+
+
+                      const cloudCover =
+                        item
+                          ?.weatherInputs
+                          ?.averageCloudCover
+                        ?? "--";
+
+
+                      const sunshineHours =
+                        item
+                          ?.weatherInputs
+                          ?.sunshineHours
+                        ?? "--";
+
+
+                      const solarRadiation =
+                        item
+                          ?.weatherInputs
+                          ?.averageSolarRadiation
+                        ?? "--";
+
+
+                      return (
+
+                        <motion.div
+
+                          key={
+                            item?.date ||
+                            index
+                          }
+
+                          initial={{
+                            opacity:
+                              0,
+
+                            y:
+                              10,
+                          }}
+
+                          animate={{
+                            opacity:
+                              1,
+
+                            y:
+                              0,
+                          }}
+
+                          transition={{
+                            delay:
+                              index * 0.05,
+                          }}
+
+                          whileHover={{
+                            y:
+                              -4,
+                          }}
+
+                          className="rounded-2xl border p-4"
+
+                          style={{
+                            borderColor,
+
+                            backgroundColor:
+                              innerBackground,
+                          }}
+                        >
+
+                          {/* DATE */}
+
+                          <div className="flex items-center justify-between">
+
+                            <p
+                              className="text-[10px] font-semibold uppercase tracking-[0.12em]"
+
+                              style={{
+                                color:
+                                  mutedColor,
+                              }}
+                            >
+
+                              {
+                                formatDisplayDate(
+                                  item?.date
+                                )
+                              }
+
+                            </p>
+
+
+                            <Sun
+                              size={15}
+
+                              style={{
+                                color:
+                                  solarColor,
+                              }}
+                            />
+
+                          </div>
+
+
+                          {/* ENERGY */}
+
+                          <p
+                            className="mt-3 text-xl font-semibold"
+
+                            style={{
+                              color:
+                                textColor,
+                            }}
+                          >
+
+                            {
+                              predictedEnergy
+                            }
+
+                            <span
+                              className="ml-1 text-[10px] font-medium"
+
+                              style={{
+                                color:
+                                  mutedColor,
+                              }}
+                            >
+                              kWh
+                            </span>
+
+                          </p>
+
+
+                          {/* WEATHER INPUTS */}
+
+                          <div
+                            className="mt-3 space-y-1 text-[11px] leading-5"
+
+                            style={{
+                              color:
+                                secondaryTextColor,
+                            }}
+                          >
+
+                            <div className="flex items-center gap-1.5">
+
+                              <Cloud
+                                size={11}
+                              />
+
+                              <span>
+
+                                Cloud:{" "}
+
+                                {
+                                  cloudCover
+                                }
+
+                                {
+                                  cloudCover !== "--"
+                                    ? "%"
+                                    : ""
+                                }
+
+                              </span>
+
+                            </div>
+
+
+                            <p>
+
+                              Sunshine:{" "}
+
+                              {
+                                sunshineHours
+                              }
+
+                              {
+                                sunshineHours !== "--"
+                                  ? " hrs"
+                                  : ""
+                              }
+
+                            </p>
+
+
+                            <p>
+
+                              Radiation:{" "}
+
+                              {
+                                solarRadiation
+                              }
+
+                              {
+                                solarRadiation !== "--"
+                                  ? " W/m²"
+                                  : ""
+                              }
+
+                            </p>
+
+                          </div>
+
+                        </motion.div>
+                      );
+                    }
+                  )
+                }
+
+              </div>
+
+            ) : (
+
+              <div
+                className="mt-4 rounded-2xl border border-dashed p-6 text-center"
+
+                style={{
+                  borderColor,
+
+                  color:
+                    mutedColor,
+                }}
+              >
+
+                No date-wise forecast data available.
+
+              </div>
+
+            )}
 
           </div>
 
 
-          {/* NOTE */}
+          {/* =================================================
+              AI NOTE
+          ================================================= */}
 
           <div
             className="mt-5 flex items-start gap-2 text-[11px] leading-5"
 
             style={{
               color:
-                mutedColor,
+                secondaryTextColor,
             }}
           >
 
-            <Sparkles
+            {/* <Sparkles
               size={13}
 
               className="mt-0.5 shrink-0"
@@ -1313,16 +1766,16 @@ function FutureEnergyForecast({
                 color:
                   solarColor,
               }}
-            />
+            /> */}
 
-
+{/* 
             <span>
 
               These values are AI-predicted solar energy estimates
               based on future weather conditions. They are not actual
               measured generation readings.
 
-            </span>
+            </span> */}
 
           </div>
 
@@ -1336,7 +1789,7 @@ function FutureEnergyForecast({
 
 
 // ============================================================
-// IMPORTANT DEFAULT EXPORT
+// DEFAULT EXPORT
 // ============================================================
 
 export default FutureEnergyForecast;
