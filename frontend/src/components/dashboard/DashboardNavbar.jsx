@@ -15,6 +15,8 @@ function DashboardNavbar({
   theme,
   themeName,
   currentTime,
+  hardwareOnline = false,
+  location = "Mumbai, India",
 }) {
   return (
     <header
@@ -71,21 +73,26 @@ function DashboardNavbar({
                 color: theme.muted,
               }}
             >
-              <span className="flex items-center gap-1.5">
+              <span
+                className="flex items-center gap-1.5 font-medium"
+                style={{
+                  color: hardwareOnline ? theme.success : "#f59e0b",
+                }}
+              >
                 <Wifi
                   size={12}
                   style={{
-                    color: theme.success,
+                    color: hardwareOnline ? theme.success : "#f59e0b",
                   }}
                 />
 
-                Connected
+                {hardwareOnline ? "Connected" : "Solar Offline"}
               </span>
 
               <span className="flex items-center gap-1.5">
                 <MapPin size={12} />
 
-                Mumbai, India
+                {location}
               </span>
             </div>
 

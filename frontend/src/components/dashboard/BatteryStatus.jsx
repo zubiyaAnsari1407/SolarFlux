@@ -37,6 +37,8 @@ function BatteryStatus({
   const batteryData = {
     ...defaultData,
 
+    ...data,
+
     percentage:
       data?.percentage ??
       defaultData.percentage,

@@ -18,7 +18,6 @@ import {
   CloudRain,
   Battery,
   IndianRupee,
-  Gauge,
   Lightbulb,
 } from "lucide-react";
 

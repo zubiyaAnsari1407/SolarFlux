@@ -16,54 +16,16 @@ import {
   CalendarDays,
 } from "lucide-react";
 
-/* ============================================================
-   FALLBACK ENERGY DATA
-
-   Backend expected format:
-
-   [
-     { time: "6 AM", solar: 0.4, usage: 1.2 },
-     { time: "8 AM", solar: 1.8, usage: 1.7 },
-     ...
-   ]
-============================================================ */
-
-const defaultEnergyData = [
-  {
-    time: "6 AM",
-    solar: 0.4,
-    usage: 1.2,
-  },
-  {
-    time: "8 AM",
-    solar: 1.8,
-    usage: 1.7,
-  },
-  {
-    time: "10 AM",
-    solar: 3.7,
-    usage: 2.1,
-  },
-  {
-    time: "12 PM",
-    solar: 5.2,
-    usage: 2.8,
-  },
-  {
-    time: "2 PM",
-    solar: 4.8,
-    usage: 3.1,
-  },
-  {
-    time: "4 PM",
-    solar: 3.6,
-    usage: 2.9,
-  },
-  {
-    time: "6 PM",
-    solar: 1.4,
-    usage: 3.4,
-  },
+// Displayed only until the first ESP32 reading has been saved to MongoDB.
+// Once live history exists, it completely replaces these previous values.
+const previousEnergyData = [
+  { time: "6 AM", solar: 0.4, usage: 1.2 },
+  { time: "8 AM", solar: 1.8, usage: 1.7 },
+  { time: "10 AM", solar: 3.7, usage: 2.1 },
+  { time: "12 PM", solar: 5.2, usage: 2.8 },
+  { time: "2 PM", solar: 4.8, usage: 3.1 },
+  { time: "4 PM", solar: 3.6, usage: 2.9 },
+  { time: "6 PM", solar: 1.4, usage: 3.4 },
 ];
 
 /* ============================================================
@@ -127,7 +89,7 @@ function CustomTooltip({
                 color: theme.muted,
               }}
             >
-              Solar
+              Solar Power
             </span>
 
           </div>
@@ -138,7 +100,8 @@ function CustomTooltip({
 
         </div>
 
-        <div className="flex items-center justify-between gap-5">
+        {usage && (
+          <div className="flex items-center justify-between gap-5">
 
           <div className="flex items-center gap-2">
 
@@ -164,7 +127,8 @@ function CustomTooltip({
             {usage?.value ?? 0} kW
           </span>
 
-        </div>
+          </div>
+        )}
 
       </div>
     </div>
@@ -178,18 +142,26 @@ function CustomTooltip({
 function EnergyChart({
   theme,
   data,
+  hardwareOnline,
 }) {
   /* ==========================================================
      SAFE BACKEND DATA
 
-     If backend data is null / undefined / empty,
-     fallback data will be used.
+     Persisted ESP32 readings take priority. Previous dashboard values remain
+     visible until the first live reading is saved.
   ========================================================== */
 
-  const safeData =
-    Array.isArray(data) && data.length > 0
-      ? data
-      : defaultEnergyData;
+  const hasRecordedData =
+    Array.isArray(data)
+      && data.length > 0;
+
+  const safeData = hasRecordedData
+    ? data
+    : previousEnergyData;
+
+  const hasUsage = safeData.some(
+    (point) => Number.isFinite(Number(point.usage))
+  );
 
   return (
     <motion.section
@@ -249,7 +221,7 @@ function EnergyChart({
                 color: theme.text,
               }}
             >
-              Energy Production
+              Live Solar Production
             </h2>
 
             <p
@@ -258,7 +230,11 @@ function EnergyChart({
                 color: theme.muted,
               }}
             >
-              Solar generation compared with household consumption
+              {hasRecordedData && hasUsage
+                ? "Live solar power compared with metered household consumption"
+                : hasRecordedData
+                ? "ESP32 solar power saved to MongoDB by time"
+                : "Previous dashboard values shown until ESP32 history is available"}
             </p>
 
           </div>
@@ -289,11 +265,13 @@ function EnergyChart({
               }}
               className="h-2 w-2 rounded-full"
               style={{
-                backgroundColor: theme.success,
+                backgroundColor: hardwareOnline
+                  ? theme.success
+                  : theme.secondary,
               }}
             />
 
-            Live
+            {hardwareOnline ? "ESP32 Live" : "ESP32 Offline"}
 
           </div>
 
@@ -339,10 +317,11 @@ function EnergyChart({
             }}
           />
 
-          Solar Generation
+          Solar Power
         </div>
 
-        <div
+        {hasUsage && (
+          <div
           className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs"
           style={{
             backgroundColor: theme.softBlue,
@@ -357,7 +336,8 @@ function EnergyChart({
           />
 
           Consumption
-        </div>
+          </div>
+        )}
 
       </div>
 
@@ -474,29 +454,31 @@ function EnergyChart({
               animationEasing="ease-in-out"
             />
 
-            {/* CONSUMPTION */}
+            {/* Consumption appears only when a real consumption meter sends it. */}
 
-            <Area
-              type="monotone"
-              dataKey="usage"
-              stroke={theme.consumption}
-              strokeWidth={2.5}
-              fill={theme.softBlue}
-              fillOpacity={
-                theme.isDark ? 0.18 : 0.35
-              }
-              dot={false}
-              activeDot={{
-                r: 5,
-                fill: theme.consumption,
-                stroke: theme.cardBg,
-                strokeWidth: 3,
-              }}
-              isAnimationActive={true}
-              animationBegin={400}
-              animationDuration={2050}
-              animationEasing="ease-in-out"
-            />
+            {hasUsage && (
+              <Area
+                type="monotone"
+                dataKey="usage"
+                stroke={theme.consumption}
+                strokeWidth={2.5}
+                fill={theme.softBlue}
+                fillOpacity={
+                  theme.isDark ? 0.18 : 0.35
+                }
+                dot={false}
+                activeDot={{
+                  r: 5,
+                  fill: theme.consumption,
+                  stroke: theme.cardBg,
+                  strokeWidth: 3,
+                }}
+                isAnimationActive={true}
+                animationBegin={400}
+                animationDuration={2050}
+                animationEasing="ease-in-out"
+              />
+            )}
 
           </AreaChart>
         </ResponsiveContainer>
@@ -524,7 +506,9 @@ function EnergyChart({
             }}
           />
 
-          Energy readings updating in real time
+          {hasRecordedData
+            ? "Live solar readings are saved to MongoDB every minute"
+            : "Showing previous dashboard values; waiting for the first ESP32 reading"}
 
         </div>
 

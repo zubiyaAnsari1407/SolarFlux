@@ -10,7 +10,6 @@ import {
   Database,
   BarChart3,
   Sun,
-  BatteryCharging,
   TriangleAlert,
   Leaf,
   Zap,

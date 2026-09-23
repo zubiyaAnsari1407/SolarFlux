@@ -67,77 +67,169 @@ def get_coordinates(location):
             "Location cannot be empty."
         )
 
-    if not GEOAPIFY_API_KEY:
-        raise ValueError(
-            "Geoapify API key is missing."
+    # 1. TRY GEOAPIFY IF API KEY IS CONFIGURED
+    if GEOAPIFY_API_KEY:
+        try:
+            params = {
+                "text": location,
+                "format": "json",
+                "lang": "en",
+                "limit": 5,
+                "filter": "countrycode:in",
+                "apiKey": GEOAPIFY_API_KEY
+            }
+            response = requests.get(
+                GEOAPIFY_GEOCODING_URL,
+                params=params,
+                timeout=10
+            )
+            response.raise_for_status()
+            data = response.json()
+            results = data.get("results", [])
+            if results:
+                place = results[0]
+                latitude = place.get("lat")
+                longitude = place.get("lon")
+                if latitude is not None and longitude is not None:
+                    area = (
+                        place.get("suburb")
+                        or place.get("district")
+                        or place.get("name")
+                    )
+                    city = (
+                        place.get("city")
+                        or place.get("county")
+                    )
+                    state = place.get("state", "")
+                    country = place.get("country", "")
+                    location_parts = []
+                    for part in [area, city, state, country]:
+                        if part and part not in location_parts:
+                            location_parts.append(part)
+                    display_name = ", ".join(location_parts) or place.get("formatted", location)
+                    return {
+                        "latitude": latitude,
+                        "longitude": longitude,
+                        "name": display_name,
+                        "country": country,
+                        "admin1": state,
+                        "timezone": "auto"
+                    }
+        except Exception as e:
+            print("Geoapify geocoding fallback:", e)
+
+    # 2. FREE OPENSTREETMAP NOMINATIM GEOCODING (NO API KEY REQUIRED)
+    try:
+        nom_url = "https://nominatim.openstreetmap.org/search"
+        nom_params = {
+            "q": location,
+            "format": "json",
+            "limit": 5,
+            "countrycodes": "in",
+            "addressdetails": 1
+        }
+        nom_headers = {
+            "User-Agent": "SolarFlux-Smart-Solar-Monitoring/1.0"
+        }
+        nom_res = requests.get(
+            nom_url,
+            params=nom_params,
+            headers=nom_headers,
+            timeout=10
         )
+        nom_res.raise_for_status()
+        nom_data = nom_res.json()
+        if not nom_data:
+            # Try global search without country restriction
+            nom_params.pop("countrycodes", None)
+            nom_res = requests.get(
+                nom_url,
+                params=nom_params,
+                headers=nom_headers,
+                timeout=10
+            )
+            nom_res.raise_for_status()
+            nom_data = nom_res.json()
 
+        if nom_data:
+            place = nom_data[0]
+            lat = float(place.get("lat"))
+            lon = float(place.get("lon"))
+            addr = place.get("address", {})
+            area = (
+                addr.get("suburb")
+                or addr.get("city_district")
+                or addr.get("neighbourhood")
+                or place.get("name")
+            )
+            city = (
+                addr.get("city")
+                or addr.get("town")
+                or addr.get("municipality")
+                or addr.get("village")
+            )
+            state = addr.get("state", "")
+            country = addr.get("country", "")
+            parts = []
+            for p in [area, city, state, country]:
+                if p and p not in parts:
+                    parts.append(p)
+            display_name = ", ".join(parts) or place.get("display_name", location)
+            return {
+                "latitude": lat,
+                "longitude": lon,
+                "name": display_name,
+                "country": country,
+                "admin1": state,
+                "timezone": "auto"
+            }
+    except Exception as e:
+        print("Nominatim geocoding error:", e)
 
-    params = {
-
-        "text":
-            location,
-
-        "format":
-            "json",
-
-        "lang":
-            "en",
-
-        "limit":
-            5,
-
-        "filter":
-            "countrycode:in",
-
-        "apiKey":
-            GEOAPIFY_API_KEY
-    }
-
-
-    response = requests.get(
-        GEOAPIFY_GEOCODING_URL,
-        params=params,
-        timeout=10
-    )
-
-    response.raise_for_status()
-
-    data = response.json()
-
-    results = data.get(
-        "results",
-        []
-    )
-
-
-    if not results:
-
-        raise ValueError(
-            f"Location '{location}' could not be verified."
+    # 3. OPEN-METEO GEOCODING FALLBACK (NO API KEY REQUIRED)
+    try:
+        om_url = "https://geocoding-api.open-meteo.com/v1/search"
+        om_params = {
+            "name": location,
+            "count": 5,
+            "language": "en",
+            "format": "json"
+        }
+        om_headers = {
+            "User-Agent": "SolarFlux-Smart-Solar-Monitoring/1.0"
+        }
+        om_res = requests.get(
+            om_url,
+            params=om_params,
+            headers=om_headers,
+            timeout=10
         )
+        om_res.raise_for_status()
+        om_data = om_res.json()
+        om_results = om_data.get("results", [])
+        if om_results:
+            p = om_results[0]
+            lat = float(p.get("latitude"))
+            lon = float(p.get("longitude"))
+            name = p.get("name", location)
+            admin1 = p.get("admin1", "")
+            country = p.get("country", "")
+            parts = [x for x in [name, admin1, country] if x]
+            display_name = ", ".join(parts) or location
+            return {
+                "latitude": lat,
+                "longitude": lon,
+                "name": display_name,
+                "country": country,
+                "admin1": admin1,
+                "timezone": p.get("timezone", "auto")
+            }
+    except Exception as e:
+        print("Open-Meteo geocoding error:", e)
 
-
-    place = results[0]
-
-
-    latitude = place.get(
-        "lat"
+    raise ValueError(
+        f"Location '{location}' could not be verified."
     )
-
-    longitude = place.get(
-        "lon"
-    )
-
-
-    if (
-        latitude is None
-        or longitude is None
-    ):
-
-        raise ValueError(
-            "Valid coordinates could not be found."
-        )
 
 
     area = (

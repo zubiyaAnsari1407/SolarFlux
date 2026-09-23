@@ -1,11 +1,6 @@
 // src/components/dashboard/WeatherCard.jsx
 
 import {
-  useEffect,
-  useState,
-} from "react";
-
-import {
   motion,
 } from "motion/react";
 
@@ -173,34 +168,10 @@ function WeatherCard({
   // LAST UPDATED
   // =========================================================
 
-  const [
-    lastUpdated,
-    setLastUpdated,
-  ] = useState(null);
-
-
-  useEffect(() => {
-
-    if (
-      weatherData &&
-      weatherData.location &&
-      weatherData.location !==
-        "Location not selected"
-    ) {
-
-      setLastUpdated(
-        new Date()
-      );
-    }
-
-  }, [
-    weatherData,
-  ]);
-
-
   const formattedLastUpdated =
-    lastUpdated
-      ? lastUpdated.toLocaleTimeString(
+    weatherData?.location &&
+    weatherData.location !== "Location not selected"
+      ? new Date().toLocaleTimeString(
           [],
           {
             hour:

@@ -1,8 +1,19 @@
 import {
+  useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
+import {
+  getHardwareData,
+} from "../services/hardwareApi";
+import {
+  getBatteryState,
+} from "../utils/batteryState";
+
+import LiveHardware
+  from "../components/dashboard/LiveHardware";
 import useDashboardTheme
   from "../hooks/useDashboardTheme";
 
@@ -14,7 +25,8 @@ import {
   getAlerts,
   getTodayImpact,
   getRecommendations,
-  getEnergyHistory,
+  getLiveSolarHistory,
+  saveSolarTelemetry,
   getAIIntelligence,
 } from "../services/dashboardApi";
 
@@ -440,10 +452,32 @@ function Dashboard() {
 
   const [
     error,
-    setError,
   ] = useState(null);
 
+const [
+  hardwareData,
+  setHardwareData,
+] = useState(null);
 
+
+const [
+  hardwareOnline,
+  setHardwareOnline,
+] = useState(false);
+
+
+  const [
+    hardwareLastUpdated,
+    setHardwareLastUpdated,
+  ] = useState(null);
+
+  const nextTelemetrySaveAt = useRef(0);
+
+  const batteryState = getBatteryState({
+    dashboardBattery: dashboardData?.battery,
+    hardwareData,
+    hardwareOnline,
+  });
   // =========================================================
   // THEME
   // =========================================================
@@ -473,60 +507,39 @@ function Dashboard() {
     async function loadDashboardData() {
 
       try {
-
         const [
           dashboardResult,
           alertsResult,
           impactResult,
           recommendationResult,
           energyHistoryResult,
-        ] = await Promise.all([
-
+        ] = await Promise.allSettled([
           getDashboardSummary(),
           getAlerts(),
           getTodayImpact(),
           getRecommendations(),
-          getEnergyHistory(),
+          getLiveSolarHistory(),
         ]);
 
-
-        setDashboardData(
-          dashboardResult
-        );
-
-        setAlertsData(
-          alertsResult
-        );
-
-        setImpactData(
-          impactResult
-        );
-
-        setRecommendationData(
-          recommendationResult
-        );
-
-        setEnergyHistory(
-          energyHistoryResult
-        );
-
+        if (dashboardResult.status === "fulfilled" && dashboardResult.value) {
+          setDashboardData(dashboardResult.value);
+        }
+        if (alertsResult.status === "fulfilled" && Array.isArray(alertsResult.value)) {
+          setAlertsData(alertsResult.value);
+        }
+        if (impactResult.status === "fulfilled" && impactResult.value) {
+          setImpactData(impactResult.value);
+        }
+        if (recommendationResult.status === "fulfilled" && recommendationResult.value) {
+          setRecommendationData(recommendationResult.value);
+        }
+        if (energyHistoryResult.status === "fulfilled" && Array.isArray(energyHistoryResult.value)) {
+          setEnergyHistory(energyHistoryResult.value);
+        }
       } catch (err) {
-
-        console.error(
-          "Dashboard API Error:",
-          err
-        );
-
-
-        setError(
-          "Unable to load dashboard data"
-        );
-
+        console.error("Dashboard API Error:", err);
       } finally {
-
-        setLoading(
-          false
-        );
+        setLoading(false);
       }
     }
 
@@ -535,20 +548,114 @@ function Dashboard() {
 
   }, []);
 
+// =========================================================
+// LIVE ESP32 HARDWARE
+// =========================================================
 
+useEffect(() => {
+
+  let mounted = true;
+
+
+  async function loadHardware() {
+
+    try {
+
+      const result =
+        await getHardwareData();
+
+
+      if (!mounted) {
+        return;
+      }
+
+
+      setHardwareData(
+        result
+      );
+
+      setHardwareOnline(
+        true
+      );
+
+      setHardwareLastUpdated(
+        result.timestamp
+      );
+
+      const now = Date.now();
+
+      // The dashboard polls the ESP32 every two seconds, but one stored
+      // sample per minute is enough for a useful history without flooding
+      // MongoDB with duplicate readings.
+      if (now >= nextTelemetrySaveAt.current) {
+        nextTelemetrySaveAt.current = now + 60_000;
+
+        saveSolarTelemetry(result)
+          .then(() => getLiveSolarHistory())
+          .then((history) => {
+            if (mounted && Array.isArray(history)) {
+              setEnergyHistory(history);
+            }
+          })
+          .catch((telemetryError) => {
+            console.error("Solar telemetry save error:", telemetryError);
+          });
+      }
+
+
+    } catch (error) {
+
+      console.error(
+        "ESP32 Hardware Error:",
+        error
+      );
+
+
+      if (mounted) {
+
+        setHardwareOnline(
+          false
+        );
+
+      }
+    }
+  }
+
+
+  // first reading immediately
+  loadHardware();
+
+
+  // new reading every 2 seconds
+  const interval =
+    setInterval(
+      loadHardware,
+      2000
+    );
+
+
+  return () => {
+
+    mounted = false;
+
+    clearInterval(
+      interval
+    );
+
+  };
+
+}, []);
   // =========================================================
   // LOAD LOCATION AI INTELLIGENCE
   // =========================================================
 
-  async function loadLocationIntelligence({
+  const loadLocationIntelligence = useCallback(async ({
     location = null,
     latitude = null,
     longitude = null,
-  }) {
+  }) => {
 
-    const batteryPercentage =
-      dashboardData?.battery?.percentage ??
-      null;
+    const batteryPercentage = batteryState.percentage;
 
 
     const result =
@@ -571,22 +678,43 @@ function Dashboard() {
     );
 
 
+    const resolvedLocation =
+      result.weather?.location ??
+      result.location ??
+      location;
+
     setWeatherData({
 
       ...result.weather,
 
-      location:
-        result.weather?.location ??
-        result.location,
+      location: resolvedLocation,
     });
+
+    if (resolvedLocation) {
+      setLocationInput(resolvedLocation);
+    }
 
 
     return result;
-  }
+  }, [
+    batteryState.percentage,
+  ]);
 
+  // Auto-fetch real location weather & AI intelligence on initial load
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      loadLocationIntelligence({ location: "Mumbai, India" }).catch((err) => {
+        console.warn("Initial location load:", err);
+        setLocationError(
+          err.message || "Unable to load SolarFlux intelligence for this location."
+        );
+      });
+    }, 0);
 
-  // =========================================================
-  // MANUAL LOCATION
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    loadLocationIntelligence,
+  ]);
   // =========================================================
 
   async function handleManualLocationSearch(
@@ -895,9 +1023,25 @@ function Dashboard() {
   // SMART RECOMMENDATION
   // =========================================================
 
-  const smartRecommendationData =
-    aiData?.recommendation ??
-    recommendationData;
+  const smartRecommendationData = {
+    ...(aiData?.recommendation || recommendationData || {}),
+    batteryPercentage: batteryState.percentage,
+    predictedGeneration:
+      aiData?.prediction?.predictedGeneration ??
+      aiData?.prediction?.tomorrow_solar_kwh ??
+      dashboardData?.energy_today?.value ??
+      20.7,
+    expectedSaving:
+      aiData?.savings?.estimatedSavings ??
+      aiData?.savings?.estimated_daily_savings_rs ??
+      (aiData?.prediction?.predictedGeneration
+        ? Math.round(Number(aiData.prediction.predictedGeneration) * 8)
+        : (impactData?.savingsToday ?? 165)),
+    weatherCondition:
+      aiData?.weather?.condition ??
+      weatherData?.condition ??
+      "Cloudy",
+  };
 
 
   // =========================================================
@@ -978,18 +1122,11 @@ function Dashboard() {
       <div className="relative z-10">
 
         <DashboardNavbar
-
-          theme={
-            theme
-          }
-
-          themeName={
-            themeName
-          }
-
-          currentTime={
-            currentTime
-          }
+          theme={theme}
+          themeName={themeName}
+          currentTime={currentTime}
+          hardwareOnline={hardwareOnline}
+          location={weatherData?.location || aiData?.location || "Mumbai, India"}
         />
 
 
@@ -1069,8 +1206,39 @@ function Dashboard() {
             data={
               dashboardData
             }
-          />
 
+            hardwareData={
+              hardwareData
+            }
+
+            hardwareOnline={
+              hardwareOnline
+            }
+
+            batteryState={
+              batteryState
+            }
+
+/>
+          <LiveHardware
+
+            theme={
+              theme
+            }
+
+            data={
+              hardwareData
+            }
+
+            online={
+              hardwareOnline
+            }
+
+            lastUpdated={
+              hardwareLastUpdated
+            }
+
+/>
 
           {/* ROW 1 */}
 
@@ -1086,6 +1254,10 @@ function Dashboard() {
 
                 data={
                   energyHistory
+                }
+
+                hardwareOnline={
+                  hardwareOnline
                 }
               />
 
@@ -1146,6 +1318,10 @@ function Dashboard() {
                 data={
                   dashboardData
                 }
+
+                batteryState={
+                  batteryState
+                }
               />
 
             </div>
@@ -1160,8 +1336,7 @@ function Dashboard() {
                 }
 
                 data={
-                  dashboardData
-                    ?.battery
+                  batteryState
                 }
               />
 
@@ -1179,6 +1354,15 @@ function Dashboard() {
                 data={
                   dashboardData
                 }
+
+                hardwareData={
+                  hardwareData
+                }
+
+                hardwareOnline={
+                  hardwareOnline
+                }
+
               />
 
             </div>

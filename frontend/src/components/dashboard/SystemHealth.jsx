@@ -43,7 +43,8 @@ const defaultHealth = [
 
 function SystemHealth({
   theme,
-  data,
+  hardwareData,
+  hardwareOnline,
 }) {
   /* ==========================================================
      BACKEND SYSTEM STATUS
@@ -55,12 +56,15 @@ function SystemHealth({
   ========================================================== */
 
   const systemStatus =
-    data?.system_status ?? "Unknown";
+    hardwareOnline
+      ? hardwareData?.inaConnected
+        ? "Hardware Online"
+        : "INA219 Sensor Error"
+      : "ESP32 Offline";
 
   const isHealthy =
-    systemStatus === "Optimal" ||
-    systemStatus === "Healthy" ||
-    systemStatus === "Online";
+    hardwareOnline &&
+    hardwareData?.inaConnected;
 
   return (
     <motion.section

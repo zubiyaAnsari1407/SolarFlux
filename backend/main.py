@@ -1,7 +1,9 @@
 from fastapi import (
     FastAPI,
-    HTTPException
+    HTTPException,
+    Body
 )
+from datetime import datetime, timedelta, timezone
 from services.ai_intelligence_service import (
     get_ai_intelligence
 )
@@ -46,7 +48,8 @@ from database import (
     alerts_collection,
     impact_collection,
     recommendations_collection,
-    energy_history_collection
+    energy_history_collection,
+    telemetry_collection
 )
 
 
@@ -71,7 +74,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173"
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -450,6 +454,99 @@ def get_energy_history():
     )
 
     return data
+
+
+# ============================================================
+# LIVE ESP32 SOLAR TELEMETRY
+# ============================================================
+
+@app.post("/api/telemetry")
+def save_telemetry(reading: dict = Body(...)):
+    """Store one ESP32 solar-panel reading for the live production chart."""
+
+    required_fields = [
+        "voltage",
+        "current",
+        "power",
+        "temperature",
+        "light",
+    ]
+
+    try:
+        normalized = {
+            field: float(reading[field])
+            for field in required_fields
+        }
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(
+            status_code=422,
+            detail="Telemetry must include numeric voltage, current, power, temperature and light values."
+        )
+
+    now = datetime.now(timezone.utc)
+
+    telemetry_collection.insert_one({
+        **normalized,
+        "lightStatus": reading.get("lightStatus", "UNKNOWN"),
+        "inaConnected": bool(reading.get("inaConnected", False)),
+        "recordedAt": now,
+    })
+
+    return {
+        "status": "saved",
+        "recordedAt": now.isoformat(),
+    }
+
+
+@app.get("/api/telemetry/history")
+def get_live_solar_history(hours: int = 24):
+    """Return hourly averages of real ESP32 solar power for the chart."""
+
+    safe_hours = min(max(hours, 1), 168)
+    start = datetime.now(timezone.utc) - timedelta(hours=safe_hours)
+
+    samples = telemetry_collection.find(
+        {"recordedAt": {"$gte": start}},
+        {"_id": 0, "power": 1, "recordedAt": 1},
+    ).sort("recordedAt", 1)
+
+    grouped = {}
+
+    for sample in samples:
+        recorded_at = sample.get("recordedAt")
+        power_mw = sample.get("power")
+
+        if not isinstance(recorded_at, datetime):
+            continue
+
+        try:
+            power_kw = float(power_mw) / 1_000_000
+        except (TypeError, ValueError):
+            continue
+
+        if recorded_at.tzinfo is None:
+            recorded_at = recorded_at.replace(tzinfo=timezone.utc)
+
+        local_time = recorded_at.astimezone()
+        key = local_time.strftime("%Y-%m-%d %H")
+
+        if key not in grouped:
+            grouped[key] = {
+                "time": local_time.strftime("%I %p").lstrip("0"),
+                "total": 0,
+                "count": 0,
+            }
+
+        grouped[key]["total"] += power_kw
+        grouped[key]["count"] += 1
+
+    return [
+        {
+            "time": entry["time"],
+            "solar": round(entry["total"] / entry["count"], 6),
+        }
+        for entry in grouped.values()
+    ]
 
 # ============================================================
 # SHAP EXPLAINABLE AI
