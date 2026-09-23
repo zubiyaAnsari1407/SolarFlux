@@ -19,6 +19,7 @@ const defaultData = {
 function EnergyFlow({
   theme,
   data,
+  batteryState,
 }) {
   /* ==========================================================
      MERGE BACKEND DATA WITH TEMPORARY FALLBACKS
@@ -34,11 +35,12 @@ function EnergyFlow({
       defaultData.consumption,
 
     batteryMode:
+      batteryState?.status ??
       data?.battery?.status ??
       defaultData.batteryMode,
 
-    // Backend me abhi battery power field nahi hai
     batteryPower:
+      batteryState?.power ??
       defaultData.batteryPower,
   };
 

@@ -1,4 +1,36 @@
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://127.0.0.1:8000";
+
+async function getResponseError(response, fallbackMessage) {
+  try {
+    const errorData = await response.json();
+    return errorData.detail || fallbackMessage;
+  } catch {
+    return fallbackMessage;
+  }
+}
+
+async function fetchApi(url, fallbackMessage, options) {
+  try {
+    const response = await fetch(url, options);
+
+    if (!response.ok) {
+      throw new Error(await getResponseError(response, fallbackMessage));
+    }
+
+    return response;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(
+        "Unable to reach the SolarFlux server. Start the backend and try the location again.",
+        { cause: error }
+      );
+    }
+
+    throw error;
+  }
+}
 
 
 // ============================================================
@@ -146,22 +178,10 @@ export async function getAIIntelligence({
   }
 
 
-  const response = await fetch(
-    `${API_BASE_URL}/api/ai/intelligence?${params.toString()}`
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/ai/intelligence?${params.toString()}`,
+    "Unable to fetch SolarFlux AI intelligence."
   );
-
-
-  if (!response.ok) {
-
-    const errorData =
-      await response.json();
-
-
-    throw new Error(
-      errorData.detail ||
-      "Failed to fetch SolarFlux AI intelligence"
-    );
-  }
 
 
   return response.json();
@@ -352,6 +372,44 @@ export async function getEnergyHistory() {
     );
   }
 
+
+  return response.json();
+}
+
+
+// ============================================================
+// LIVE ESP32 SOLAR TELEMETRY
+// ============================================================
+
+export async function saveSolarTelemetry(reading) {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/telemetry`,
+    "Unable to save the live solar reading.",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        voltage: reading.voltage,
+        current: reading.current,
+        power: reading.power,
+        temperature: reading.temperature,
+        light: reading.light,
+        lightStatus: reading.lightStatus,
+        inaConnected: reading.inaConnected,
+      }),
+    }
+  );
+
+  return response.json();
+}
+
+export async function getLiveSolarHistory() {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/telemetry/history`,
+    "Unable to fetch live solar history."
+  );
 
   return response.json();
 }

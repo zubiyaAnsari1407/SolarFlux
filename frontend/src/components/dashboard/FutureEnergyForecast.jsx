@@ -215,10 +215,14 @@ function FutureEnergyForecast({
       initialLocation.trim()
     ) {
 
-      setLocation(
-        initialLocation
-      );
+      const timeoutId = window.setTimeout(() => {
+        setLocation(initialLocation);
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
     }
+
+    return undefined;
 
   }, [
     initialLocation,
